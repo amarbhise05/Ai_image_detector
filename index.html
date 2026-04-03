@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>VeriFace — AI Image Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --c1: #ff3cac;
+    --c2: #784ba0;
+    --c3: #2b86c5;
+    --c4: #00f5a0;
+    --c5: #f9ca24;
+    --fake: #ff4757;
+    --real: #2ed573;
+    --bg: #0a0a12;
+    --surface: #12121e;
+    --surface2: #1a1a2e;
+    --border: rgba(255,255,255,0.07);
+    --text: #f0f0ff;
+    --muted: rgba(240,240,255,0.45);
+    --font-display: 'Syne', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Background mesh ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(255,60,172,0.15) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 110%, rgba(43,134,197,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 40% at 50% 50%, rgba(120,75,160,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  /* ── Header ── */
+  header { text-align: center; margin-bottom: 52px; }
+
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .logo-icon {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--c1), var(--c3));
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    box-shadow: 0 0 24px rgba(255,60,172,0.4);
+    animation: pulse-logo 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse-logo {
+    0%, 100% { box-shadow: 0 0 24px rgba(255,60,172,0.4); }
+    50% { box-shadow: 0 0 40px rgba(255,60,172,0.7), 0 0 80px rgba(43,134,197,0.3); }
+  }
+
+  .logo-text {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 28px;
+    background: linear-gradient(90deg, var(--c1), var(--c3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .tagline {
+    font-size: 15px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    font-weight: 300;
+  }
+
+  .tagline span {
+    background: linear-gradient(90deg, var(--c4), var(--c5));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 500;
+  }
+
+  /* ── Upload Zone ── */
+  .upload-zone {
+    border: 2px dashed rgba(255,60,172,0.3);
+    border-radius: 24px;
+    padding: 56px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: var(--surface);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .upload-zone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,60,172,0.03), rgba(43,134,197,0.03));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .upload-zone:hover::before,
+  .upload-zone.drag-over::before { opacity: 1; }
+
+  .upload-zone:hover,
+  .upload-zone.drag-over {
+    border-color: var(--c1);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 48px rgba(255,60,172,0.15), inset 0 0 32px rgba(255,60,172,0.04);
+  }
+
+  .upload-zone.drag-over {
+    border-color: var(--c4);
+    box-shadow: 0 12px 48px rgba(0,245,160,0.2), inset 0 0 32px rgba(0,245,160,0.05);
+  }
+
+  .upload-icon {
+    width: 72px; height: 72px;
+    background: linear-gradient(135deg, rgba(255,60,172,0.15), rgba(43,134,197,0.15));
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+    margin: 0 auto 20px;
+    border: 1px solid rgba(255,60,172,0.2);
+    transition: all 0.3s;
+  }
+
+  .upload-zone:hover .upload-icon,
+  .upload-zone.drag-over .upload-icon {
+    transform: scale(1.1) rotate(-5deg);
+    background: linear-gradient(135deg, rgba(255,60,172,0.25), rgba(43,134,197,0.25));
+  }
+
+  .upload-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .upload-sub {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+
+  .upload-btn {
+    display: inline-block;
+    padding: 10px 28px;
+    background: linear-gradient(135deg, var(--c1), var(--c2));
+    border-radius: 100px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    color: white;
+    font-family: var(--font-body);
+  }
+
+  .upload-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(255,60,172,0.4);
+  }
+
+  .formats {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+
+  .format-tag {
+    padding: 3px 10px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    font-size: 11px;
+  }
+
+  #file-input { display: none; }
+
+  /* ── Preview Card ── */
+  .preview-card {
+    background: var(--surface);
+    border-radius: 24px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    display: none;
+    animation: slide-up 0.4s ease;
+  }
+
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .preview-img-wrap {
+    position: relative;
+    width: 100%;
+    max-height: 420px;
+    overflow: hidden;
+    background: #000;
+  }
+
+  .preview-img-wrap img {
+    width: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    display: block;
+  }
+
+  .preview-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, transparent 60%, rgba(0,0,0,0.6));
+  }
+
+  .preview-close {
+    position: absolute;
+    top: 14px; right: 14px;
+    width: 34px; height: 34px;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: white;
+    font-size: 16px;
+    transition: all 0.2s;
+    backdrop-filter: blur(8px);
+  }
+
+  .preview-close:hover { background: rgba(255,71,87,0.6); transform: scale(1.1); }
+
+  .preview-meta {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .preview-name { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .preview-size { font-size: 13px; color: var(--muted); }
+
+  /* ── Detect Button ── */
+  .detect-wrap { display: flex; justify-content: center; margin: 24px 0; }
+
+  .detect-btn {
+    position: relative;
+    padding: 16px 52px;
+    background: linear-gradient(135deg, var(--c1), var(--c2), var(--c3));
+    background-size: 200% 200%;
+    border-radius: 100px;
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+    transition: all 0.3s;
+    animation: gradient-shift 4s ease infinite;
+    letter-spacing: 0.02em;
+  }
+
+  @keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  .detect-btn:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 16px 48px rgba(255,60,172,0.45);
+  }
+
+  .detect-btn:active { transform: translateY(-1px) scale(1.01); }
+
+  .detect-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .detect-btn .btn-icon { font-size: 18px; }
+
+  /* Spinner */
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Result Card ── */
+  .result-card {
+    border-radius: 24px;
+    overflow: hidden;
+    display: none;
+    animation: slide-up 0.5s ease;
+    border: 1px solid var(--border);
+  }
+
+  .result-header {
+    padding: 32px 28px 24px;
+    text-align: center;
+    position: relative;
+  }
+
+  .result-header.fake {
+    background: linear-gradient(135deg, rgba(255,71,87,0.15), rgba(255,71,87,0.05));
+    border-bottom: 1px solid rgba(255,71,87,0.2);
+  }
+
+  .result-header.real {
+    background: linear-gradient(135deg, rgba(46,213,115,0.15), rgba(46,213,115,0.05));
+    border-bottom: 1px solid rgba(46,213,115,0.2);
+  }
+
+  .result-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 32px;
+    border-radius: 100px;
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    margin-bottom: 20px;
+  }
+
+  .result-badge.fake {
+    background: rgba(255,71,87,0.15);
+    color: var(--fake);
+    border: 2px solid rgba(255,71,87,0.4);
+    box-shadow: 0 0 40px rgba(255,71,87,0.2);
+  }
+
+  .result-badge.real {
+    background: rgba(46,213,115,0.15);
+    color: var(--real);
+    border: 2px solid rgba(46,213,115,0.4);
+    box-shadow: 0 0 40px rgba(46,213,115,0.2);
+  }
+
+  /* Confidence bar */
+  .confidence-wrap { padding: 0 28px; margin-bottom: 4px; }
+
+  .conf-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .conf-label { font-size: 13px; color: var(--muted); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+  .conf-pct { font-family: var(--font-display); font-size: 22px; font-weight: 800; }
+  .conf-pct.fake { color: var(--fake); }
+  .conf-pct.real { color: var(--real); }
+
+  .conf-track {
+    height: 8px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 100px;
+    overflow: hidden;
+  }
+
+  .conf-fill {
+    height: 100%;
+    border-radius: 100px;
+    width: 0%;
+    transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .conf-fill.fake { background: linear-gradient(90deg, #ff4757, #ff6b81); }
+  .conf-fill.real { background: linear-gradient(90deg, #2ed573, #7bed9f); }
+
+  /* ── Reasons ── */
+  .reasons-wrap {
+    padding: 20px 28px 28px;
+    background: var(--surface2);
+  }
+
+  .reasons-title {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  .reason-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    border-left: 3px solid rgba(255,71,87,0.5);
+    font-size: 14px;
+    color: rgba(240,240,255,0.8);
+    animation: fade-in 0.4s ease both;
+  }
+
+  .reason-item:last-child { margin-bottom: 0; }
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ── Error Card ── */
+  .error-card {
+    display: none;
+    padding: 18px 20px;
+    background: rgba(255,71,87,0.08);
+    border: 1px solid rgba(255,71,87,0.25);
+    border-radius: 16px;
+    animation: slide-up 0.3s ease;
+  }
+
+  .error-inner { display: flex; gap: 12px; align-items: flex-start; }
+  .error-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .error-title { font-size: 14px; font-weight: 600; color: #ff6b81; margin-bottom: 4px; }
+  .error-msg { font-size: 13px; color: var(--muted); white-space: pre-wrap; font-family: monospace; }
+
+  /* ── History ── */
+  .history-section { margin-top: 48px; }
+
+  .history-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .history-title {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .history-count {
+    background: linear-gradient(135deg, var(--c1), var(--c2));
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-family: var(--font-body);
+  }
+
+  .clear-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: var(--font-body);
+  }
+
+  .clear-btn:hover { border-color: var(--fake); color: var(--fake); }
+
+  .history-empty {
+    text-align: center;
+    padding: 32px;
+    color: var(--muted);
+    font-size: 14px;
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px dashed var(--border);
+  }
+
+  .history-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .history-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px;
+    background: var(--surface);
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    animation: slide-up 0.3s ease;
+    transition: border-color 0.2s;
+  }
+
+  .history-item:hover { border-color: rgba(255,255,255,0.12); }
+
+  .history-left { display: flex; align-items: center; gap: 12px; }
+
+  .history-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .history-dot.fake { background: var(--fake); box-shadow: 0 0 8px rgba(255,71,87,0.5); }
+  .history-dot.real { background: var(--real); box-shadow: 0 0 8px rgba(46,213,115,0.5); }
+
+  .history-fname { font-size: 14px; font-weight: 500; }
+  .history-conf { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .history-right { display: flex; align-items: center; gap: 14px; }
+
+  .history-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    border-radius: 100px;
+  }
+
+  .history-label.fake {
+    background: rgba(255,71,87,0.12);
+    color: var(--fake);
+    border: 1px solid rgba(255,71,87,0.3);
+  }
+
+  .history-label.real {
+    background: rgba(46,213,115,0.12);
+    color: var(--real);
+    border: 1px solid rgba(46,213,115,0.3);
+  }
+
+  .history-time { font-size: 11px; color: var(--muted); }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 20px;
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card:hover { border-color: rgba(255,255,255,0.12); }
+
+  .stat-num {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--c1), var(--c3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .page { padding: 24px 16px 60px; }
+    .stats-bar { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat-num { font-size: 22px; }
+    .detect-btn { padding: 14px 36px; font-size: 15px; }
+    .result-badge { font-size: 22px; padding: 10px 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🔍</div>
+      <span class="logo-text">VeriFace</span>
+    </div>
+    <p class="tagline">Detect <span>AI-generated</span> images instantly with deep learning</p>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-num" id="stat-total">0</div>
+      <div class="stat-label">Scanned</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-fake" style="background:linear-gradient(135deg,#ff4757,#ff6b81);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">0</div>
+      <div class="stat-label">Fake</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-real" style="background:linear-gradient(135deg,#2ed573,#7bed9f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">0</div>
+      <div class="stat-label">Real</div>
+    </div>
+  </div>
+
+  <!-- Upload Zone -->
+  <div class="upload-zone" id="upload-zone">
+    <div class="upload-icon">🖼️</div>
+    <div class="upload-title">Drop your image here</div>
+    <p class="upload-sub">or click to browse from your device</p>
+    <button class="upload-btn" onclick="document.getElementById('file-input').click()">Choose Image</button>
+    <div class="formats">
+      <span class="format-tag">JPG</span>
+      <span class="format-tag">PNG</span>
+      <span class="format-tag">WEBP</span>
+      <span class="format-tag">GIF</span>
+    </div>
+    <input type="file" id="file-input" accept="image/*"/>
+  </div>
+
+  <!-- Preview Card -->
+  <div class="preview-card" id="preview-card">
+    <div class="preview-img-wrap">
+      <img id="preview-img" src="" alt="Preview"/>
+      <div class="preview-overlay"></div>
+      <button class="preview-close" id="close-preview" title="Remove image">✕</button>
+    </div>
+    <div class="preview-meta">
+      <div class="preview-name">🖼️ <span id="file-name">image.jpg</span></div>
+      <div class="preview-size" id="file-size">0 KB</div>
+    </div>
+  </div>
+
+  <!-- Detect Button -->
+  <div class="detect-wrap" id="detect-wrap" style="display:none;">
+    <button class="detect-btn" id="detect-btn">
+      <span class="btn-icon">⚡</span>
+      <span id="btn-text">Analyze Image</span>
+    </button>
+  </div>
+
+  <!-- Error Card -->
+  <div class="error-card" id="error-card">
+    <div class="error-inner">
+      <div class="error-icon">⚠️</div>
+      <div>
+        <div class="error-title">Detection Failed</div>
+        <div class="error-msg" id="error-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result Card -->
+  <div class="result-card" id="result-card">
+    <div class="result-header" id="result-header">
+      <div class="result-badge" id="result-badge"></div>
+    </div>
+    <div class="confidence-wrap" style="padding-top:24px;">
+      <div class="conf-row">
+        <span class="conf-label">Confidence</span>
+        <span class="conf-pct" id="conf-pct"></span>
+      </div>
+      <div class="conf-track">
+        <div class="conf-fill" id="conf-fill"></div>
+      </div>
+    </div>
+    <div class="reasons-wrap" id="reasons-wrap" style="display:none;">
+      <div class="reasons-title">⚠️ Why Fake?</div>
+      <div id="reasons-list"></div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="history-section">
+    <div class="history-header">
+      <div class="history-title">
+        🕒 Detection History
+        <span class="history-count" id="history-count">0</span>
+      </div>
+      <button class="clear-btn" id="clear-btn">Clear all</button>
+    </div>
+    <div id="history-container">
+      <div class="history-empty" id="history-empty">No detections yet — upload an image to get started</div>
+      <div class="history-list" id="history-list"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── Config ──────────────────────────────────────────────────
+  const BACKEND = 'http://127.0.0.1:7860'; // ← change port if needed
+
+  // ── State ───────────────────────────────────────────────────
+  let currentFile = null;
+  let stats = { total: 0, fake: 0, real: 0 };
+  let history = [];
+
+  // ── Elements ─────────────────────────────────────────────────
+  const uploadZone   = document.getElementById('upload-zone');
+  const fileInput    = document.getElementById('file-input');
+  const previewCard  = document.getElementById('preview-card');
+  const previewImg   = document.getElementById('preview-img');
+  const detectWrap   = document.getElementById('detect-wrap');
+  const detectBtn    = document.getElementById('detect-btn');
+  const btnText      = document.getElementById('btn-text');
+  const resultCard   = document.getElementById('result-card');
+  const errorCard    = document.getElementById('error-card');
+
+  // ── Drag & Drop ──────────────────────────────────────────────
+  uploadZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    uploadZone.classList.add('drag-over');
+  });
+
+  uploadZone.addEventListener('dragleave', e => {
+    if (!uploadZone.contains(e.relatedTarget))
+      uploadZone.classList.remove('drag-over');
+  });
+
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadFile(file);
+  });
+
+  uploadZone.addEventListener('click', e => {
+    if (e.target !== document.querySelector('.upload-btn'))
+      fileInput.click();
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) loadFile(fileInput.files[0]);
+  });
+
+  // ── Load file ────────────────────────────────────────────────
+  function loadFile(file) {
+    currentFile = file;
+    const url = URL.createObjectURL(file);
+    previewImg.src = url;
+    document.getElementById('file-name').textContent = file.name;
+    document.getElementById('file-size').textContent = formatSize(file.size);
+
+    uploadZone.style.display  = 'none';
+    previewCard.style.display = 'block';
+    detectWrap.style.display  = 'flex';
+    resultCard.style.display  = 'none';
+    errorCard.style.display   = 'none';
+  }
+
+  // ── Clear preview ────────────────────────────────────────────
+  document.getElementById('close-preview').addEventListener('click', () => {
+    currentFile = null;
+    previewImg.src = '';
+    fileInput.value = '';
+    uploadZone.style.display  = 'block';
+    previewCard.style.display = 'none';
+    detectWrap.style.display  = 'none';
+    resultCard.style.display  = 'none';
+    errorCard.style.display   = 'none';
+  });
+
+  // ── Detect ───────────────────────────────────────────────────
+  detectBtn.addEventListener('click', detect);
+
+  async function detect() {
+    if (!currentFile) return;
+
+    // Loading state
+    detectBtn.disabled = true;
+    detectBtn.innerHTML = '<div class="spinner"></div><span>Analyzing...</span>';
+    resultCard.style.display = 'none';
+    errorCard.style.display  = 'none';
+
+    try {
+      const form = new FormData();
+      form.append('image', currentFile);
+
+      const res = await fetch(`${BACKEND}/detect`, { method: 'POST', body: form });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${res.status}`);
+      }
+
+      const data = await res.json();
+      showResult(data);
+
+    } catch (err) {
+      console.error(err);
+      let msg = err.message || 'Unknown error';
+      if (msg.includes('fetch') || msg.includes('NetworkError') || msg.includes('Failed to fetch')) {
+        msg = 'Cannot connect to backend.\nMake sure Flask is running:\n  python app.py';
+      }
+      showError(msg);
+    } finally {
+      detectBtn.disabled = false;
+      detectBtn.innerHTML = '<span class="btn-icon">⚡</span><span>Analyze Again</span>';
+    }
+  }
+
+  // ── Show result ──────────────────────────────────────────────
+  function showResult(data) {
+    const label = data.result.toLowerCase();  // "fake" or "real"
+    const conf  = data.confidence;             // 0–100
+    const reasons = data.explanation || [];
+
+    // Badge
+    const header = document.getElementById('result-header');
+    const badge  = document.getElementById('result-badge');
+    header.className = `result-header ${label}`;
+    badge.className  = `result-badge ${label}`;
+    badge.innerHTML  = label === 'fake'
+      ? '<span>🚨</span> FAKE <span>✗</span>'
+      : '<span>✅</span> REAL <span>✓</span>';
+
+    // Confidence
+    const pct  = document.getElementById('conf-pct');
+    const fill = document.getElementById('conf-fill');
+    pct.textContent = `${Math.round(conf)}%`;
+    pct.className = `conf-pct ${label}`;
+    fill.className = `conf-fill ${label}`;
+    setTimeout(() => { fill.style.width = `${conf}%`; }, 50);
+
+    // Reasons
+    const reasonsWrap = document.getElementById('reasons-wrap');
+    const reasonsList = document.getElementById('reasons-list');
+    if (label === 'fake' && reasons.length > 0) {
+      reasonsList.innerHTML = reasons.map((r, i) =>
+        `<div class="reason-item" style="animation-delay:${i * 0.1}s">⚠️ ${r}</div>`
+      ).join('');
+      reasonsWrap.style.display = 'block';
+    } else {
+      reasonsWrap.style.display = 'none';
+    }
+
+    resultCard.style.display = 'block';
+
+    // Update stats
+    stats.total++;
+    stats[label]++;
+    updateStats();
+
+    // Add to history
+    addHistory(currentFile.name, label, conf);
+  }
+
+  // ── Show error ───────────────────────────────────────────────
+  function showError(msg) {
+    document.getElementById('error-msg').textContent = msg;
+    errorCard.style.display = 'block';
+  }
+
+  // ── Stats ────────────────────────────────────────────────────
+  function updateStats() {
+    document.getElementById('stat-total').textContent = stats.total;
+    document.getElementById('stat-fake').textContent  = stats.fake;
+    document.getElementById('stat-real').textContent  = stats.real;
+  }
+
+  // ── History ──────────────────────────────────────────────────
+  function addHistory(name, label, conf) {
+    const now = new Date();
+    const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    history.unshift({ name, label, conf, time });
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const list  = document.getElementById('history-list');
+    const empty = document.getElementById('history-empty');
+    const count = document.getElementById('history-count');
+
+    count.textContent = history.length;
+
+    if (history.length === 0) {
+      empty.style.display = 'block';
+      list.innerHTML = '';
+      return;
+    }
+
+    empty.style.display = 'none';
+    list.innerHTML = history.map(item => `
+      <div class="history-item">
+        <div class="history-left">
+          <div class="history-dot ${item.label}"></div>
+          <div>
+            <div class="history-fname">${truncate(item.name, 30)}</div>
+            <div class="history-conf">${Math.round(item.conf)}% confidence</div>
+          </div>
+        </div>
+        <div class="history-right">
+          <span class="history-label ${item.label}">${item.label.toUpperCase()}</span>
+          <span class="history-time">${item.time}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    history = [];
+    renderHistory();
+  });
+
+  // ── Helpers ──────────────────────────────────────────────────
+  function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function truncate(str, max) {
+    return str.length > max ? str.slice(0, max) + '...' : str;
+  }
+
+  renderHistory();
+</script>
+</body>
+</html>
